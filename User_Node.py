@@ -16,12 +16,11 @@ import asyncio
 import websockets
 
 async def echo_client():
-    uri = "ws://localhost:9001"
+    uri = "ws://127.0.0.1:9001"
     async with websockets.connect(uri) as websocket:
-        while True:
-            message = input("Enter a message: ")
-            await websocket.send(message)
-            response = await websocket.recv()
-            print(f"Received: {response}")
+        message = input("Enter a message: ")
+        await websocket.send(message)
+        response = await websocket.recv()
+        await websocket.close()
 
 asyncio.get_event_loop().run_until_complete(echo_client())
