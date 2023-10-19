@@ -9,7 +9,7 @@ grpc/ http / sockety
 1. Kryptografia asymetryczna (RSA/Krzywe Eliptyczne) - Klucze
 # Przechowywanie kluczy :
 1. Portfel to para kluczy 
-2. http
+2. http/webscoket/
 
 # Uruchomienie programu :
 1. bądz pierwszym/ do węzłą 

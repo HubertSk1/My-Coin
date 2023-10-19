@@ -1,20 +1,25 @@
-import time
-import asyncio
+import Crypto
+from Crypto.PublicKey import RSA
+from Crypto import Random
+import ast
+import hashlib
 
-async def task1():
-    print("task 1 started")
-    await  asyncio.sleep(2)
-    print("task 1 finished")
+from Crypto.Cipher import PKCS1_OAEP
 
-async def task2():
-    print("task 2 started")
-    await asyncio.sleep(2)
-    print("task 2 finished")
+user_input = "gwiazda"
 
-loop = asyncio.get_event_loop()
-tasks = [
-    loop.create_task(task1()),
-    loop.create_task(task2())]
- 
-loop.run_until_complete(asyncio.wait(tasks))
-loop.close()
+seed = hashlib.sha256(user_input.encode('utf-8')).digest()
+random_generator = Random.new().read
+key = RSA.generate(1024, random_generator) #generate pub and priv key
+
+publickey = key.publickey() # pub key export for exchange
+publickey.public_key()
+
+message="zakodowane".encode()
+cipher = PKCS1_OAEP.new(publickey)
+encrypted = cipher.encrypt(message)
+
+print('encrypted message:', encrypted) 
+cipher = PKCS1_OAEP.new(key)
+decrypted = cipher.decrypt(encrypted)
+print('decrypted:', decrypted.decode('utf-8'))
