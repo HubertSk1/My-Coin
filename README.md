@@ -6,13 +6,14 @@ grpc/ http / sockety
 #Weryfikacja Tożsamości(Pobrania pola z jsona) 
 
 # Tożsamość cyfrowa :
-1. Kryptografia asymetryczna (RSA/Krzywe Eliptyczne) - Klucze
+1. Kryptografia asymetryczna (RSA/Krzywe Eliptyczne) - Klucze ++
+
 # Przechowywanie kluczy :
-1. Portfel to para kluczy 
-2. http/webscoket/
+1. Portfel to para kluczy ++ 
+2. http/webscoket/  ++
 
 # Uruchomienie programu :
-1. bądz pierwszym/ do węzłą 
+1. bądz pierwszym/ do węzłą  ++
 
 # Weryfikacja Tożsamości:
-1. Dostanie podis -> sprawdza czy legit (Autor podisu to klucz publiczny )
+1. Dostanie podis -> sprawdza czy legit (Autor podisu to klucz publiczny )  ++
