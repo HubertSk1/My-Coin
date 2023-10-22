@@ -1,132 +1,60 @@
 import asyncio
-import websockets
 import aioconsole
 import json
-import random 
-import hashlib
 import base64
-from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_OAEP
-from Crypto.PublicKey import RSA
-from Crypto.Signature import pkcs1_15
-from Crypto.Hash import SHA256
-from Message import Message_Generator
+from Crypto.Random import get_random_bytes
+import ast
+from Node import Node
+import random
+class HomeNode(Node):
+    def __init__(self):
+        super().__init__("home",9001,"127.0.0.1")
 
-Home_Node_Public = """-----BEGIN PUBLIC KEY-----
-MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCRmK3JDQObgn+RKUSbo5zzvazu
-NZ7QP/fx7T4kWLRxWh45D8D3Tojm45Jr4qTo4WigJ4+3blznlxg+kaa31YXQJPQw
-o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
-9NWr+64beIA1ER7NhQIDAQAB
------END PUBLIC KEY-----"""
+    async def send_joining_list(self,receiver_name):
+        key_value_list = list(self.list_of_nodes.keys())
 
-class HomeNode:
-    def __init__(self,pass_phrase,port):
-        self.ip = "127.0.0.1"
-        self.port = port
-        self.pass_phrase = pass_phrase
-        self._private_key,self.public_key = self.generate_keys(pass_phrase)
-        self.list_of_nodes = {}#format {'ip:port'=public_key,}
-        self.mg = Message_Generator(f"{self.ip}:{self.port}",self.public_key)
-
-    def generate_keys(self,input_word: str) -> (str, str):
-        """Derive a private and public key pair from the user input using a deterministic method."""
+        if len(key_value_list) < 2:
+            key_value_list = None
+            selected_data={}
+        else:
+            key_value_list = random.sample(key_value_list, 2)
+            selected_data = {field: self.list_of_nodes[field] for field in key_value_list if field != receiver_name}
         
-        # Seed python's random with the hash of the input_word for a bit more entropy.
-        seed = int(hashlib.sha256(input_word.encode('utf-8')).hexdigest(), 16)
-        random.seed(seed)
-        
-        # A function to produce deterministic random bytes using Python's random
-        def deterministic_random_bytes(n):
-            return bytes([random.randint(0, 255) for _ in range(n)])
-        
-        # Use a constant value for reproducible key generation
-        random_generator = deterministic_random_bytes
-        
-        key = RSA.generate(1024, randfunc=random_generator) 
-        private_key = key.export_key().decode('utf-8')
-        public_key = key.publickey().export_key().decode('utf-8')
-        return (private_key, public_key)
-    
-    def encrypt_message(self, message, key):
-        key = RSA.import_key(key)
-        cipher = PKCS1_OAEP.new(key)
-        encrypted = cipher.encrypt(message.encode())
-        return encrypted
+        content = self.mg.generate_joining_list(selected_data)
+        encrypted_content = self.hybrid_encrypt(content,self.list_of_nodes[receiver_name])
+        encrypted_data_string = base64.b64encode(str(encrypted_content).encode('utf-8')).decode('utf-8')
+        signature = self.sign_message(content,self._private_key)
+        message =json.dumps( {"content":encrypted_data_string, "signature" : base64.b64encode(signature).decode('utf-8')})
+        await self.send_message(receiver_name,message)
 
-    def decrypt_message(self, message, key):
-        key = RSA.import_key(key)
-        cipher = PKCS1_OAEP.new(key)
-        decrypted = cipher.decrypt(message)
-        return decrypted.decode('utf-8')
-    
-    def verify_message(self, msg, author):
-        raise NotImplementedError()
-
-    async def send_message(name,message): #name format ip:port
-        uri = f"ws://{name}"
-        async with websockets.connect(uri) as websocket:
-            await websocket.send(message)
-            await websocket.close()
-
-    def sign_message(self, message, private_key):
-        key = RSA.import_key(private_key)
-        if type(message) ==bytes:
-            h = SHA256.new(message)
-        else:    
-            h = SHA256.new(message.encode('utf-8'))
-        signature = pkcs1_15.new(key).sign(h)
-        return signature
-
-    def verify_signature(self,message, signature, public_key):
-        key = RSA.import_key(public_key)
-        h = SHA256.new(message.encode('utf-8'))
-        try:
-            pkcs1_15.new(key).verify(h, signature)
-            return True  
-        except Exception:
-            return False  
-
-    def analyze_message(self,message):
-        wrong_message = False
-        try:
-            msg_json =json.loads(message)
-            encrypted_content = msg_json["content"]
-            encrypted_content = base64.b64decode(encrypted_content.encode('utf-8'))
-            content_decrypted = self.decrypt_message(encrypted_content,self._private_key)
-            content = json.loads(content_decrypted)
-        except:
-            wrong_message = True
-
+    async def analyze_message(self,message):
+        msg_json = json.loads(message)
         signature = base64.b64decode(msg_json["signature"].encode('utf-8'))
-        is_signature_valid = self.verify_signature(content_decrypted, signature, msg_json["public_key"])
-    
-        if is_signature_valid and not wrong_message:
-            if  content["type_of_message"] == "req-join":
-                self.list_of_nodes[content["author"]]=msg_json["public_key"]
+        message_encrypted = msg_json["content"]
 
-    
-    async def websocket_listener(self, websocket, path):
-        async for message in websocket:
-            self.analyze_message(message)
+        encrypted_data = base64.b64decode(message_encrypted).decode('utf-8')
+        s = ast.literal_eval(encrypted_data)
+        decrypted_message = self.hybrid_decrypt(s, self._private_key)
+        json_decrypted = json.loads(decrypted_message)
+
+        if json_decrypted["type_of_message"]=="req-join":
+            is_signature_valid = self.verify_signature(decrypted_message, signature, json_decrypted["public_key"])
+            if is_signature_valid:
+                self.list_of_nodes[json_decrypted["author"]]=json_decrypted["public_key"]
                 
-
-    async def start_server(self):
-        server = await websockets.serve(self.websocket_listener, self.ip, self.port)
-        await asyncio.gather(self.node_live(), server.wait_closed())
+                await self.send_joining_list(json_decrypted["author"])
 
     async def node_live(self):
         while True:
-            user_input = await aioconsole.ainput("Enter something (or 'quit' to exit): ")
+            user_input = await aioconsole.ainput("Enter_Home_Node_Commends:\n")
             if user_input == 'quit':
                 break
             print(f"You entered: {user_input}")
 
 async def main():
-    node = HomeNode("home",9001)
+    node = HomeNode()
     await node.start_server()
 
 if __name__ == "__main__":
     asyncio.run(main())
 
-
-message = {"message":{"author":"Ip:port","type_of_message":"req-join","content":""}, "Signature" : "" }
