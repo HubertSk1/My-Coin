@@ -5,6 +5,7 @@ import ast
 import asyncio
 import aioconsole
 import random
+import os
 class User_Node(Node):  
     def __init__(self, pass_phrase, port, ip):
         super().__init__(pass_phrase, port, ip)
@@ -40,10 +41,16 @@ class User_Node(Node):
             user_input = await aioconsole.ainput("Enter something (or 'quit' to exit): ")
             if user_input == 'req':
                 await self.send_join_req()
-
+            if user_input == 'pub':
+                print(f"{self.ip}:{self.port}")
+                print(self.public_key)
+            if user_input == 'clear':
+                os.system('cls')
+            if user_input == 'nodes':
+                print(self.list_of_nodes)
 async def main():
     random_number = random.randint(1, 99)
-    random_number=3
+    # random_number=3
     node = User_Node(f"user{random_number}",9002+random_number,"127.0.0.1")
     
     await node.start_server()

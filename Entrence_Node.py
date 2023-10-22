@@ -6,6 +6,7 @@ from Crypto.Random import get_random_bytes
 import ast
 from Node import Node
 import random
+import os
 class HomeNode(Node):
     def __init__(self):
         super().__init__("home",9001,"127.0.0.1")
@@ -46,9 +47,15 @@ class HomeNode(Node):
 
     async def node_live(self):
         while True:
-            user_input = await aioconsole.ainput("Enter_Home_Node_Commends:\n")
+            user_input = await aioconsole.ainput("Enter_Home_Node_Commends: ")
             if user_input == 'quit':
                 break
+            if user_input == 'nodes':
+                print(self.list_of_nodes)
+            if user_input == 'clear':
+                os.system('cls')
+            if user_input == 'pub':
+                print({f"{self.ip}:{self.port}":self.public_key})
             print(f"You entered: {user_input}")
 
 async def main():
