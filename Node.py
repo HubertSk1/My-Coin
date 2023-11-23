@@ -1,24 +1,28 @@
-import asyncio
-import websockets
-import aioconsole
+from websocket_server import WebsocketServer
+import websocket
 import random 
+import json
 import hashlib
-from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_OAEP
+import base64
+import threading
+import os,sys
+import random
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
-from Message import Message_Generator
-from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.Random import get_random_bytes
+from threading import Event
+
+from Message import Message_Generator
+from block import Block, BlockChain
 
 class Node:
     def __init__(self,pass_phrase,port,ip):
         self.ip = ip
         self.port = port
         self.pass_phrase = pass_phrase
-        self._private_key,self.public_key = self.generate_keys(pass_phrase)
-        self.list_of_nodes = {}#format {"public_key":'ip:port',}
+        
+        self._private_key, self.public_key = self.generate_keys(pass_phrase)
         self.mg = Message_Generator(f"{self.ip}:{self.port}",self.public_key)
         self.Home_Node_Public = """-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCRmK3JDQObgn+RKUSbo5zzvazu
@@ -27,7 +31,14 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
 9NWr+64beIA1ER7NhQIDAQAB
 -----END PUBLIC KEY-----"""
         self.Home_Node_name = "127.0.0.1:9001"
+        self.list_of_nodes = {self.Home_Node_Public:self.Home_Node_name} #format {public_key":"ip:port"}
 
+        #BLOCKCHAIN
+        self.blockchain = BlockChain(12)
+        self.block_chain_edited_event = threading.Event()
+        self.mine_order = threading.Event()
+
+    #SIGNATURES
     def generate_keys(self,input_word: str) -> (str, str):
         """Derive a private and public key pair from the user input using a deterministic method."""
         
@@ -47,43 +58,6 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         public_key = key.publickey().export_key().decode('utf-8')
         return (private_key, public_key)
     
-    def hybrid_encrypt(self,message, public_key):
-        rsa_public_key = RSA.import_key(public_key)
-        # Generate random symmetric AES key
-        aes_key = get_random_bytes(16)
-        
-        # Encrypt message using AES
-        cipher_aes = AES.new(aes_key, AES.MODE_EAX)
-        nonce = cipher_aes.nonce
-        ciphertext, tag = cipher_aes.encrypt_and_digest(message.encode('utf-8'))
-        
-        # Encrypt the AES key using RSA
-        cipher_rsa = PKCS1_OAEP.new(rsa_public_key)
-        encrypted_aes_key = cipher_rsa.encrypt(aes_key)
-        
-        return (encrypted_aes_key, nonce, ciphertext)
-
-    def hybrid_decrypt(self,encrypted_data, private_key):
-
-        rsa_private_key = RSA.import_key(private_key)
-        encrypted_aes_key, nonce, ciphertext = encrypted_data
-        
-        # Decrypt the AES key using RSA
-        cipher_rsa = PKCS1_OAEP.new(rsa_private_key)
-        decrypted_aes_key = cipher_rsa.decrypt(encrypted_aes_key)
-        
-        # Decrypt the message using AES
-        cipher_aes = AES.new(decrypted_aes_key, AES.MODE_EAX, nonce=nonce)
-        decrypted_message = cipher_aes.decrypt(ciphertext)
-        
-        return decrypted_message.decode('utf-8')
-    
-    async def send_message(self,name,message): #name format ip:port
-        uri = f"ws://{name}"
-        async with websockets.connect(uri) as websocket:
-            await websocket.send(message)
-            await websocket.close()
-
     def sign_message(self, message, private_key):
         key = RSA.import_key(private_key)
         if type(message) ==bytes:
@@ -93,9 +67,6 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         signature = pkcs1_15.new(key).sign(h)
         return signature
 
-    async def analyze_message(message):
-        pass # The implementation will differ for Home Node and User Node
-
     def verify_signature(self,message, signature, public_key):
         key = RSA.import_key(public_key)
         h = SHA256.new(message.encode('utf-8'))
@@ -103,20 +74,132 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             pkcs1_15.new(key).verify(h, signature)
             return True  
         except Exception:
-            return False  
+            return False
+    
+    def start_miner(self):
+        while 1:
+            if self.mine_order.is_set():
+                self.block_chain_edited_event.clear()
+                found, new_block = self.blockchain.generate_next_block("",self.block_chain_edited_event)
+                if found:
+                    self.blockchain.add_block(new_block)
+                    self.mine_order.clear()
 
-    async def websocket_listener(self, websocket, path):
-        async for message in websocket:
-            await self.analyze_message(message)
-                
+    def start_server(self):
+        receive_thread = threading.Thread(target = self.start_listener,daemon=True)
+        send_thread = threading.Thread(target = self.live)
+        mine_thread = threading.Thread(target = self.start_miner,daemon=True)
+        receive_thread.start()
+        send_thread.start()
+        mine_thread.start()
 
-    async def start_server(self):
-        server = await websockets.serve(self.websocket_listener, self.ip, self.port)
-        await asyncio.gather(self.node_live(), server.wait_closed())
+    #SERVER SENDING MESSAGES
+    def send_msg(self, name, message):
+        for_signing = json.dumps(message)
+        signature = self.sign_message(for_signing, self._private_key)
+        signature = base64.b64encode(signature).decode('utf-8')
+        
+        msg_to_send = {"signature":signature, "content":message}
+        msg_json = json.dumps(msg_to_send)
+        uri = f"ws://{name}" #ip:port
+        ws = websocket.WebSocket()
+        ws.connect(uri)
+        try:
+            ws.send(msg_json)
 
-    async def node_live(self):
-        while True:
-            user_input = await aioconsole.ainput("Enter_Home_Node_Commends")
-            if user_input == 'quit':
+        finally:
+            ws.close()
+
+    def send_familiar_nodes(self,target_node_name):
+        key_value_list = self.list_of_nodes.keys()
+        if len(key_value_list) < 3:
+            selected_data = self.list_of_nodes
+        else:
+            key_value_list = random.sample(key_value_list, 3)
+            selected_data = {field: self.list_of_nodes[field] for field in key_value_list if self.list_of_nodes[field] != target_node_name}
+        selected_data = {"nodes":selected_data,"blockchain":self.blockchain.pack_blockchain()}
+        data = json.dumps(selected_data)
+        message = self.mg.generate_message("join-list",data)
+        self.send_msg(target_node_name, message)
+
+    
+    def send_request_join(self):
+        message = self.mg.generate_message("req-join",None)
+        self.send_msg(self.Home_Node_name,message)
+
+
+    #SERVER RECEIVING MESSAGES
+    def start_listener(self):
+        server = WebsocketServer(port=self.port)  # You can specify your desired port
+
+        server.set_fn_message_received(self.analyze_message)
+        try:
+            server.run_forever()
+        except KeyboardInterrupt:
+            print("Server stopping...")
+            server.shutdown() 
+        server.run_forever()
+
+
+    def analyze_message(self,client, server, message):
+        msg_json = json.loads(message)
+        content = msg_json["content"]
+        signature = base64.b64decode(msg_json["signature"].encode('utf-8'))
+        if self.verify_signature(json.dumps(content),signature,content["public_key"]):
+            if content['author']==f"{self.ip}:{self.port}":
+                print("self_message_ignored")
+                return None
+            msg_type = content["message_type"]
+
+            if msg_type == "req-join":
+                self.send_familiar_nodes(content['author'])
+                self.list_of_nodes[content["public_key"]]=content["author"]
+                print("got reqeust-join, send join-list")
+            
+            if msg_type == "join-list":
+                print("got_node_list")
+                data = json.loads(content["data"])
+                nodes = data["nodes"]  
+                for key,value in nodes.items():
+                    self.list_of_nodes[key] = value
+                try:
+                    self.list_of_nodes.pop(self.public_key)
+                except:
+                    pass
+                blockchain_to_check = BlockChain.unpack_blockchain(data["blockchain"].encode("latin-1"))
+                self.blockchain.find_longer_chain(blockchain_to_check)
+
+    # UI
+    def live(self):
+        while 1:
+            try:
+                user_input = input("input ur command here:\n")
+            except KeyboardInterrupt:
+                N.receive_thread.join()  # Optionally join threads to ensure they have stopped
+                N.send_thread.join()
+                print("Exiting...")
                 break
-            print(f"You entered: {user_input}")
+            except EOFError:
+                break
+            if user_input == 'req':
+                self.send_request_join()
+            elif user_input == 'pub':
+                print(f"{self.ip}:{self.port}")
+                print(self.public_key)
+            elif user_input == 'clear':
+                os.system('cls')
+            elif user_input == 'nodes':
+                print(self.list_of_nodes)
+            elif user_input == 'blockchain':
+                [print(f"-----\n{block}\n-----") for block in self.blockchain.chain]
+            elif user_input == 'mine':
+                self.mine_order.set()
+            #TEST
+            elif user_input == 'change':
+                self.block_chain_edited_event.set()
+        sys.exit()
+
+if __name__ == "__main__":
+    random_number = random.randint(1, 99)
+    N = Node(f"user{random_number}",9000+random_number,"127.0.0.1")
+    N.start_server()
