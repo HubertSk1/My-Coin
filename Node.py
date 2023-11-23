@@ -11,10 +11,10 @@ from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
 from Crypto.Random import get_random_bytes
-from threading import Event
+
 
 from Message import Message_Generator
-from block import Block, BlockChain
+from block import BlockChain
 
 class Node:
     def __init__(self,pass_phrase,port,ip):
@@ -34,9 +34,9 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         self.list_of_nodes = {self.Home_Node_Public:self.Home_Node_name} #format {public_key":"ip:port"}
 
         #BLOCKCHAIN
-        self.blockchain = BlockChain(12)
+        self.blockchain = BlockChain(5)
         self.block_chain_edited_event = threading.Event()
-        self.mine_order = threading.Event()
+        self.start_mining = threading.Event()
 
     #SIGNATURES
     def generate_keys(self,input_word: str) -> (str, str):
@@ -78,12 +78,13 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
     
     def start_miner(self):
         while 1:
-            if self.mine_order.is_set():
+            if self.start_mining.is_set():
                 self.block_chain_edited_event.clear()
                 found, new_block = self.blockchain.generate_next_block("",self.block_chain_edited_event)
                 if found:
                     self.blockchain.add_block(new_block)
-                    self.mine_order.clear()
+                    self.send_synchro_blockchain()
+                    self.start_mining.clear()
 
     def start_server(self):
         receive_thread = threading.Thread(target = self.start_listener,daemon=True)
@@ -127,6 +128,11 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         message = self.mg.generate_message("req-join",None)
         self.send_msg(self.Home_Node_name,message)
 
+    def send_synchro_blockchain(self,to_skip=None):
+        message =self.mg.generate_message("blockchain-sync",{"blockchain": self.blockchain.pack_blockchain()})
+        for name in self.list_of_nodes.values():
+            if name != to_skip:
+                self.send_msg(name,message)
 
     #SERVER RECEIVING MESSAGES
     def start_listener(self):
@@ -156,7 +162,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 self.list_of_nodes[content["public_key"]]=content["author"]
                 print("got reqeust-join, send join-list")
             
-            if msg_type == "join-list":
+            elif msg_type == "join-list":
                 print("got_node_list")
                 data = json.loads(content["data"])
                 nodes = data["nodes"]  
@@ -169,7 +175,16 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 blockchain_to_check = BlockChain.unpack_blockchain(data["blockchain"].encode("latin-1"))
                 self.blockchain.find_longer_chain(blockchain_to_check)
 
-    # UI
+            elif msg_type == "blockchain-sync" :
+                data = content["data"]
+                name = content["author"]
+                print(f"got sync from {name}")
+                blockchain_to_check = BlockChain.unpack_blockchain(data["blockchain"].encode("latin-1"))
+                if self.blockchain.find_longer_chain(blockchain_to_check):
+                    self.send_synchro_blockchain(name)
+                
+
+    # UI        
     def live(self):
         while 1:
             try:
@@ -193,7 +208,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             elif user_input == 'blockchain':
                 [print(f"-----\n{block}\n-----") for block in self.blockchain.chain]
             elif user_input == 'mine':
-                self.mine_order.set()
+                self.start_mining.set()
             #TEST
             elif user_input == 'change':
                 self.block_chain_edited_event.set()
@@ -201,5 +216,5 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
 
 if __name__ == "__main__":
     random_number = random.randint(1, 99)
-    N = Node(f"user{random_number}",9000+random_number,"127.0.0.1")
+    N = Node(f"user{random_number}",9001+random_number,"127.0.0.1")
     N.start_server()

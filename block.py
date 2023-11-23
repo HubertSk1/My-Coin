@@ -72,10 +72,11 @@ class BlockChain:
     #CONSENSUS    
     def find_longer_chain(self,chain_to_check )-> None:
         if self.is_valid_chain(chain_to_check) and len(self.chain)<len(chain_to_check.chain):
-            self.chain = chain_to_check
-
+            self.chain = chain_to_check.chain
+            return True
+        else:
+            return False
     #MINING 
-
     def generate_next_block(self,block_data: str, stop_event:threading.Event):
         previous_block = self.get_latest_block()
         next_index = previous_block.index + 1
@@ -102,19 +103,3 @@ class BlockChain:
     @classmethod
     def unpack_blockchain(cls, packed_blockchain: str):
         return pickle.loads(packed_blockchain)
-
-
-#TESTY
-if __name__ == "__main__":
-    B1 = BlockChain()
-    new_block = B1.generate_next_block("")
-    print(new_block)
-    B1.add_block(new_block)
-    print(B1.is_valid_new_block(B1.chain[1],B1.chain[0]))
-
-
-    B2 = BlockChain()
-    new_block = B2.generate_next_block("FASAFAS")
-    print(new_block.hash)
-    B2.add_block(new_block)
-    print(B2.is_valid_chain(B1))
