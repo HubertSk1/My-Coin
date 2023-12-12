@@ -34,7 +34,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         self.list_of_nodes = {self.Home_Node_Public:self.Home_Node_name} #format {public_key":"ip:port"}
 
         #BLOCKCHAIN
-        self.blockchain = BlockChain(5)
+        self.blockchain = BlockChain(4)
         self.block_chain_edited_event = threading.Event()
         self.start_mining = threading.Event()
 
@@ -84,8 +84,8 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 if found:
                     self.blockchain.add_block(new_block)
                     self.send_synchro_blockchain()
-                    self.start_mining.clear()
-
+                self.start_mining.clear()
+                
     def start_server(self):
         receive_thread = threading.Thread(target = self.start_listener,daemon=True)
         send_thread = threading.Thread(target = self.live)
@@ -181,6 +181,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 print(f"got sync from {name}")
                 blockchain_to_check = BlockChain.unpack_blockchain(data["blockchain"].encode("latin-1"))
                 if self.blockchain.find_longer_chain(blockchain_to_check):
+                    self.block_chain_edited_event.set()
                     self.send_synchro_blockchain(name)
                 
 
