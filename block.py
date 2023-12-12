@@ -12,6 +12,8 @@ from typing import Iterable, Self
 import json
 import logging
 
+from utils import verify, sign
+
 
 @dataclass
 class TransInput:
@@ -24,11 +26,12 @@ class TransOutput:
     public_key: str  # PEM
     amount: int
 
+
 @dataclass(frozen=True, slots=True)
 class Transaction:
     input: TransInput | None
     output: TransOutput
-    
+
     def serialized_input_output(self) -> str:
         inp = self.input
         ou = self.output
@@ -46,31 +49,23 @@ class Transaction:
             return "|" + output_json_dump
 
 
+@dataclass(frozen=True, slots=True)
 class TransactionSigned(Transaction):
     signature: str
 
-
     @classmethod
-    def from_transaction(cls, public_key) -> Self:
-        pass
+    def from_transaction(cls, t: Transaction, public_key) -> Self:
+        serialized = t.serialized_input_output().encode()
+        signature = sign(serialized, public_key)
+        return cls(t.input, t.output, signature)
 
     def is_valid(self) -> bool:
-        serialised = self.serialized_input_output().encode()
+        serialized = self.serialized_input_output().encode()
         key = self.input.public_key if self.input else self.output.public_key
-        pub_key = serial.load_pem_public_key(key.encode())
-        if isinstance(pub_key, ec.EllipticCurvePublicKey):
-            print(pub_key)
-            signature = bytes.fromhex(self.signature)
-            separators = (",", ":")
-            serial_contents = self.serialized_input_output().encode()
-            print(f"serial_contents = {serial_contents}")
-            try:
-                pub_key.verify(signature, serial_contents, ec.ECDSA(algorithm=hashes.SHA256()))
-                return True
-            except crypto_exceptions.InvalidSignature:
-                return False
-        else:
-            print("Unsupported public key format")
+        try:
+            verify(key, self.signature, serialized)
+            return True
+        except crypto_exceptions.InvalidSignature:
             return False
 
 
@@ -83,6 +78,9 @@ def eval_balance(
         output = trans.output
         # check signaged
         # check if ammount is the same as fee
+        if not trans.is_valid():
+            raise Exception("Transaction not valid")
+
         if not input:
             # mined
             if output.amount == miner_fee:

@@ -11,35 +11,24 @@ from typing import Any
 
 import requests
 
-def verify(public_key: str, sign: str, data: dict[str,Any]):
+def verify(public_key: str, signature: str, data: bytes):
     pub_key = serial.load_pem_public_key(public_key.encode())
     if isinstance(pub_key, ec.EllipticCurvePublicKey):
         print("It' public key")
-        signature = bytes.fromhex(sign)
-        print(f"signature = {sign}")
-        separators = (",", ":")
-        serial_contents = json.dumps(
-                obj=data, sort_keys=True, separators=separators
-            ).encode()
-        print(f"serial_contents = {serial_contents}")
-        pub_key.verify(signature, serial_contents, ec.ECDSA(hashes.SHA256()))
+        print(f"signature = {signature}")
+        _signature = bytes.fromhex(signature)
+        print(f"serial_contents = {data}")
+        pub_key.verify(_signature, data, ec.ECDSA(hashes.SHA256()))
     else:
-        print("Unsupported public key format")
-        return False
+        raise Exception("Unsupported public key format")
 
 def sign(
-    contents: dict[str,Any],
+    data: bytes,
     private_key: ec.EllipticCurvePrivateKey,
     ):
-    separators = (",", ":")
-    print(contents)
-    serialized_contents = json.dumps(
-        contents, sort_keys=True, separators=separators
-    ).encode()
-
+    print(f"serial_contents = {data}")
     signed = private_key.sign(
-        serialized_contents, ec.ECDSA(hashes.SHA256())
+        data, ec.ECDSA(hashes.SHA256())
     ).hex()  # DER encoded
-    print(f"serial_contents = {serialized_contents}")
     print(f"signature = {signed}")
     return signed
