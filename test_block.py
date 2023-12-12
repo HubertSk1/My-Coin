@@ -52,4 +52,13 @@ def test_trans_serialized(dummy_trans):
         print("After serialized")
         print(t.serialized_input_output())
         print("#" * 5)
+        
+    t = transactions[-1]
+    print(
+        json.dumps(
+        dataclasses.asdict(t),
+        sort_keys=True,
+        indent=None
+        )
+    )
     
