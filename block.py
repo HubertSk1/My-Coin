@@ -54,9 +54,9 @@ class TransactionSigned(Transaction):
     signature: str
 
     @classmethod
-    def from_transaction(cls, t: Transaction, public_key) -> Self:
+    def from_transaction(cls, t: Transaction, private_key: ec.EllipticCurvePrivateKey) -> Self:
         serialized = t.serialized_input_output().encode()
-        signature = sign(serialized, public_key)
+        signature = sign(serialized, private_key)
         return cls(t.input, t.output, signature)
 
     def is_valid(self) -> bool:
