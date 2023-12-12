@@ -1,0 +1,105 @@
+from dataclasses import dataclass
+from hashlib import sha256
+from datetime import datetime
+import threading
+import pickle
+
+@dataclass
+class Block:
+    index: int
+    hash: str
+    previous_hash :str | None
+    timestamp: int
+    data: str | None
+    nonce: int | None
+class BlockChain:
+    def __init__(self,difficulty = 4):
+        self.genesis_hash =None
+        self.chain = [Block(0,self.genesis_hash,None,None,None,None)]
+        self.difficulty = difficulty
+
+    def add_block(self, block : Block):
+        self.chain.append(block)
+
+    def get_latest_block(self) -> Block:
+        return self.chain[-1]
+     
+    #HASH CALCULATIONS    
+    def calculate_hash_from_values(self,index:int, previous_hash:str, timestamp: int, data :str,nonce :int):
+        data_str = f"{index}{previous_hash}{timestamp}{data}{nonce}"
+        hashed_data = sha256(data_str.encode()).hexdigest()
+        return hashed_data
+
+    def calculate_hash_for_block(self,block: Block):
+        data_str=f"{block.index}{block.previous_hash}{block.timestamp}{block.data}{block.nonce}"
+        hashed_data = sha256(data_str.encode()).hexdigest()
+        return hashed_data
+    
+    #VALIDATION
+    def hash_matches_difficulty(self,hash_value: str):
+        return hash_value[:self.difficulty] == '0' * self.difficulty
+
+    def is_valid_new_block(self,new_block: Block, previous_block: Block):
+        if previous_block.index + 1 != new_block.index:
+            print('Invalid index')
+            return False
+        elif previous_block.hash != new_block.previous_hash:
+            print('Invalid previous hash')
+            return False
+        elif not self.hash_matches_difficulty(new_block.hash):
+            print('Number of 0 doesnt match teh difficulty')
+            return False
+        elif self.calculate_hash_for_block(new_block) != new_block.hash:
+            print('Invalid hash:', self.calculate_hash_for_block(new_block), new_block.hash)
+            return False
+        return True
+    
+    def is_valid_chain(self,blockchain_to_validate):
+        #Verify if genesis valid
+        if blockchain_to_validate.chain[0].index != 0:
+            return False
+        elif blockchain_to_validate.chain[0].hash != None:
+            return False
+        
+        #Verify the rest of blocks
+        for i in range(1, len(blockchain_to_validate.chain)):
+            if not self.is_valid_new_block(blockchain_to_validate.chain[i], blockchain_to_validate.chain[i - 1]):
+                return False
+        
+        #If all the verifications passed return true
+        return True
+    
+    #CONSENSUS    
+    def find_longer_chain(self,chain_to_check )-> None:
+        if self.is_valid_chain(chain_to_check) and len(self.chain)<len(chain_to_check.chain):
+            self.chain = chain_to_check.chain
+            return True
+        else:
+            return False
+    #MINING 
+    def generate_next_block(self,block_data: str, stop_event:threading.Event):
+        previous_block = self.get_latest_block()
+        next_index = previous_block.index + 1
+        next_timestamp = int(datetime.now().timestamp())
+        found,new_block = self.find_block(next_index, previous_block.hash, next_timestamp, block_data, stop_event)
+        return found,new_block
+
+    def find_block(self,index: int, previous_hash: str, timestamp: int, data: str, stop_event:threading.Event):
+        nonce = 0
+        while True:
+            hash_value = self.calculate_hash_from_values(index, previous_hash, timestamp, data, nonce)
+            if stop_event.is_set():
+                print("Someone found the block before you")
+                return False,None
+            if self.hash_matches_difficulty(hash_value):
+                print("YOU FOUND BLOCK :)")
+                return True,Block(index, hash_value, previous_hash, timestamp, data,nonce)
+            nonce += 1
+
+    #SERIALIZATION
+    def pack_blockchain(self) -> str:
+        return pickle.dumps(self).decode("latin-1")
+    #DESERIALIZATION 
+    @classmethod
+    def unpack_blockchain(cls, packed_blockchain: str):
+        return pickle.loads(packed_blockchain)

@@ -6,16 +6,6 @@ class Message_Generator:
         self.author = author #ip:port
         self.public_key = pub_key
     
-    def generate_req_join(self,public_key):
-        message = {"author": self.author, "public_key":public_key, "type_of_message":"req-join"}
-        msg = json.dumps(message)
+    def generate_message(self, message_type:str, data:str=None):
+        msg = {"public_key":self.public_key,"author":self.author,"message_type":message_type, "data":data}
         return msg
-    def generate_joining_list(self,list_of_nodes_json):
-        message = {"author": self.author, "type_of_message":"joining-list", "content" : json.dumps(list_of_nodes_json)}
-        msg = json.dumps(message)
-        return msg
-        
-
-
-
-        
