@@ -1,29 +1,55 @@
 from dataclasses import dataclass
+
+import dataclasses
 from typing import Iterable
 
+import json
 import logging
 
-@dataclass
-class TransInput():
-    public_key: str #PEM
-    amount: int
 
 @dataclass
-class TransOutput():
-    public_key: str #PEM
+class TransInput:
+    public_key: str  # PEM
     amount: int
 
+
 @dataclass
-class TransactionSigned():
+class TransOutput:
+    public_key: str  # PEM
+    amount: int
+
+
+@dataclass(frozen=True, slots=True)
+class TransactionSigned:
     input: TransInput | None
     output: TransOutput
     signature: str
 
     def is_valid(self) -> bool:
+        serialised = self.serialized_input_output().encode()
+        
         return False
 
+    def serialized_input_output(self) -> str:
+        inp = self.input
+        ou = self.output
+        separators = (",", ":")
+        output_json_dump = json.dumps(
+            obj=dataclasses.asdict(ou), sort_keys=True, separators=separators
+        )
 
-def eval_balance(transactions: Iterable[TransactionSigned], accounts: dict[str,int], miner_fee: int):
+        if inp:
+            inp_json_dump = json.dumps(
+                obj=dataclasses.asdict(inp), sort_keys=True, separators=separators
+            )
+            return inp_json_dump + "|" + output_json_dump
+        else:
+            return "|" + output_json_dump
+
+
+def eval_balance(
+    transactions: Iterable[TransactionSigned], accounts: dict[str, int], miner_fee: int
+):
     for trans in transactions:
         print(trans)
         input = trans.input
@@ -57,7 +83,8 @@ def eval_balance(transactions: Iterable[TransactionSigned], accounts: dict[str,i
                     accounts[payer_address] -= expense
     return accounts
 
-#validate trans    
 
-# loop to find balances 
-# create dict with balances 
+# validate trans
+
+# loop to find balances
+# create dict with balances
