@@ -7,6 +7,7 @@ import base64
 import threading
 import os,sys
 import random
+import ast
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
@@ -15,6 +16,7 @@ from Crypto.Random import get_random_bytes
 
 from Message import Message_Generator
 from block import BlockChain
+from Transactions import *
 
 class Node:
     def __init__(self,pass_phrase,port,ip):
@@ -32,7 +34,8 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
 -----END PUBLIC KEY-----"""
         self.Home_Node_name = "127.0.0.1:9001"
         self.list_of_nodes = {self.Home_Node_Public:self.Home_Node_name} #format {public_key":"ip:port"}
-
+        #TRANSACTIONS
+        self.proposed_transactions = [] # List of transactions
         #BLOCKCHAIN
         self.blockchain = BlockChain(4)
         self.block_chain_edited_event = threading.Event()
@@ -58,7 +61,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         public_key = key.publickey().export_key().decode('utf-8')
         return (private_key, public_key)
     
-    def sign_message(self, message, private_key):
+    def sign_message(self, message, private_key:str):
         key = RSA.import_key(private_key)
         if type(message) ==bytes:
             h = SHA256.new(message)
@@ -80,7 +83,11 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         while 1:
             if self.start_mining.is_set():
                 self.block_chain_edited_event.clear()
-                found, new_block = self.blockchain.generate_next_block("",self.block_chain_edited_event)
+                Coin_Base = Transaction(None,TransOutput(self.public_key, 50),0)
+                Coin_Base_str = [TransactionSigned.from_transaction(Coin_Base,self._private_key).pack_transaction(),]
+                list_of_transactions_str = [Transaction.pack_transaction() for Transaction in self.proposed_transactions]
+                data = str(Coin_Base_str+list_of_transactions_str)
+                found, new_block = self.blockchain.generate_next_block(data,self.block_chain_edited_event)
                 if found:
                     self.blockchain.add_block(new_block)
                     self.send_synchro_blockchain()
@@ -134,6 +141,28 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             if name != to_skip:
                 self.send_msg(name,message)
 
+    def send_synchro_transactions(self,transaction:TransactionSigned, to_skip=None):
+        message =self.mg.generate_message("transaction-sync",{"transaction": transaction.pack_transaction()})
+        for name in self.list_of_nodes.values():
+            if name != to_skip:
+                self.send_msg(name,message)
+
+    def add_transaction(self, to, amount_from, amount_to, verify:bool = False):
+        transaction_not_signed = Transaction(TransInput(self.public_key,amount_from),TransOutput(to, amount_to),len(self.proposed_transactions) + 1)
+        transaction_signed = TransactionSigned.from_transaction(transaction_not_signed,self._private_key)
+        list_with_transactions = self.blockchain.unpack_transactions_from_blockchain() + self.proposed_transactions
+        if verify:
+            try:
+                balances = eval_balance(list_with_transactions,{},50)
+            except Exception as E:
+                print(f"verification didnt pass")
+                return False
+        self.proposed_transactions.append(transaction_signed)
+        self.block_chain_edited_event.set()
+        self.send_synchro_transactions(transaction_signed)
+
+
+
     #SERVER RECEIVING MESSAGES
     def start_listener(self):
         server = WebsocketServer(port=self.port)  # You can specify your desired port
@@ -172,19 +201,35 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                     self.list_of_nodes.pop(self.public_key)
                 except:
                     pass
-                blockchain_to_check = BlockChain.unpack_blockchain(data["blockchain"].encode("latin-1"))
+                blockchain_to_check = BlockChain.unpack_blockchain(data["blockchain"])
                 self.blockchain.find_longer_chain(blockchain_to_check)
 
             elif msg_type == "blockchain-sync" :
                 data = content["data"]
                 name = content["author"]
-                print(f"got sync from {name}")
-                blockchain_to_check = BlockChain.unpack_blockchain(data["blockchain"].encode("latin-1"))
+                print(f"got blockchain sync from {name}")
+                blockchain_to_check = BlockChain.unpack_blockchain(data["blockchain"])
                 if self.blockchain.find_longer_chain(blockchain_to_check):
                     self.block_chain_edited_event.set()
                     self.send_synchro_blockchain(name)
-                
 
+            elif msg_type =="transaction-sync":
+                data = content["data"]
+                name = content["author"]
+                print(f"got transaction sync from {name}")
+                transaction_to_check = TransactionSigned.unpack_transaction(data["transaction"])
+                if not any(transaction_to_check == x for x in self.proposed_transactions):
+                    transactions_to_check = self.blockchain.unpack_transactions_from_blockchain() + self.proposed_transactions + [transaction_to_check,]
+                    try :
+                        eval_balance(transactions_to_check,{},50)
+                        self.proposed_transactions.append(transaction_to_check)
+                        self.block_chain_edited_event.set()
+                        self.send_synchro_transactions(transaction_to_check,name)
+                        print("transaction added and broadcasted")
+                    except :
+                        print("wrong transaction")
+                else:
+                    "got message with the transaction i already have"
     # UI        
     def live(self):
         while 1:
@@ -210,9 +255,30 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 [print(f"-----\n{block}\n-----") for block in self.blockchain.chain]
             elif user_input == 'mine':
                 self.start_mining.set()
-            #TEST
-            elif user_input == 'change':
-                self.block_chain_edited_event.set()
+            #TRANSACTIONS TESTS
+
+            elif user_input == 'pay_familiar_node':
+                self.add_transaction(list(self.list_of_nodes.keys())[-1], 10,10,True)
+            elif user_input == 'double_pay':
+                self.add_transaction(list(self.list_of_nodes.keys())[-1], 25,25,True)    
+            elif user_input == 'balances':
+                list_with_transactions = self.blockchain.unpack_transactions_from_blockchain()+self.proposed_transactions
+                print(eval_balance(list_with_transactions,{},50))
+            elif user_input == 'commited':
+                transactions=self.blockchain.unpack_transactions_from_blockchain()
+                print(len(transactions))
+            elif user_input == 'proposed':
+                print(len(self.proposed_transactions))
+
+            #TRANSACTIONS CHEATER ATTEMPTS
+            elif user_input == 'pay_negative_value':
+                self.add_transaction(list(self.list_of_nodes.keys())[-1], -10,-10,False)
+            elif user_input =='pay_less_get_more':
+                self.add_transaction(list(self.list_of_nodes.keys())[-1], 5,100,False)
+            elif user_input == 'double_spender':
+                self.add_transaction(self.Home_Node_Public, 50,50,False)
+                self.add_transaction(self.Home_Node_Public, 50,50,False)
+                    
         sys.exit()
 
 if __name__ == "__main__":

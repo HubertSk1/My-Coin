@@ -3,6 +3,8 @@ from hashlib import sha256
 from datetime import datetime
 import threading
 import pickle
+import ast
+from Transactions import *
 
 @dataclass
 class Block:
@@ -12,6 +14,7 @@ class Block:
     timestamp: int
     data: str | None
     nonce: int | None
+
 class BlockChain:
     def __init__(self,difficulty = 4):
         self.genesis_hash =None
@@ -66,9 +69,26 @@ class BlockChain:
             if not self.is_valid_new_block(blockchain_to_validate.chain[i], blockchain_to_validate.chain[i - 1]):
                 return False
         
-        #If all the verifications passed return true
+        #Verify Transactions
+        
+        list_with_transactions = self.unpack_transactions_from_blockchain()
+        try:
+            eval_balance(list_with_transactions,{},50)
+        except Exception as E:
+            print(E)
+            return False
+
+
         return True
     
+    def unpack_transactions_from_blockchain(self):
+        list_with_transactions = []
+        for i in range(0, len(self.chain)):
+                if self.chain[i].data:
+                    list_with_transactions = list_with_transactions + ast.literal_eval(self.chain[i].data)
+        list_with_transactions = [TransactionSigned.unpack_transaction(str_transaction) for str_transaction in list_with_transactions ]
+        return list_with_transactions
+
     #CONSENSUS    
     def find_longer_chain(self,chain_to_check )-> None:
         if self.is_valid_chain(chain_to_check) and len(self.chain)<len(chain_to_check.chain):
@@ -102,4 +122,4 @@ class BlockChain:
     #DESERIALIZATION 
     @classmethod
     def unpack_blockchain(cls, packed_blockchain: str):
-        return pickle.loads(packed_blockchain)
+        return pickle.loads(packed_blockchain.encode("latin-1"))
