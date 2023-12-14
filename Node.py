@@ -1,3 +1,4 @@
+from typing import Tuple
 from websocket_server import WebsocketServer
 import websocket
 import random 
@@ -15,7 +16,7 @@ from Crypto.Random import get_random_bytes
 
 
 from Message import Message_Generator
-from block import BlockChain
+from block import BlockChain, Block
 from Transactions import *
 
 class Node:
@@ -42,7 +43,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         self.start_mining = threading.Event()
 
     #SIGNATURES
-    def generate_keys(self,input_word: str) -> (str, str):
+    def generate_keys(self,input_word: str) -> Tuple[str, str]:
         """Derive a private and public key pair from the user input using a deterministic method."""
         
         # Seed python's random with the hash of the input_word for a bit more entropy.
@@ -89,16 +90,16 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 data = str(Coin_Base_str+list_of_transactions_str)
                 found, new_block = self.blockchain.generate_next_block(data,self.block_chain_edited_event)
                 if found:
-                    self.blockchain.add_block(new_block)
+                    self.blockchain.add_block(new_block) # type: ignore
                     self.send_synchro_blockchain()
                 self.start_mining.clear()
                 
     def start_server(self):
-        receive_thread = threading.Thread(target = self.start_listener,daemon=True)
-        send_thread = threading.Thread(target = self.live)
+        self.receive_thread = threading.Thread(target = self.start_listener,daemon=True)
+        self.send_thread = threading.Thread(target = self.live)
         mine_thread = threading.Thread(target = self.start_miner,daemon=True)
-        receive_thread.start()
-        send_thread.start()
+        self.receive_thread.start()
+        self.send_thread.start()
         mine_thread.start()
 
     #SERVER SENDING MESSAGES
