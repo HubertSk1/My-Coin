@@ -1,9 +1,3 @@
-import cryptography.hazmat.primitives.serialization as serial
-import cryptography.exceptions as crypto_exceptions
-
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes
-
 from dataclasses import dataclass
 
 import dataclasses
@@ -68,10 +62,11 @@ class TransactionSigned(Transaction):
         if self.input and self.input.amount != self.output.amount:
             return False
         try:
-            verify(serialized, self.signature, key)
+            verify(serialized, self.signature.encode(), key)
             return True
-        except crypto_exceptions.InvalidSignature:
+        except Exception:
             return False
+
     #SERIALIZATION
     def pack_transaction(self) -> str:
         return pickle.dumps(self).decode("latin-1")
