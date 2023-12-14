@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "my-coin"
+# version = "0.3.0"
+requires-python = ">= 3.12"
+dynamic = ["version"]
+readme = "README.md"
+
+authors = [
+  {name = "HubertSk1", email = "Hubert.Skibinski@outlook.com"},
+  {name = "1stDimension", email = "23144389+1stDimension@users.noreply.github.com"},
+]
+
+dependencies = [
+  "pycryptodome",
+  "websocket_server",
+  "websocket-client",
+]
+
+classifiers = [
+  "Programming Language :: Python",
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+]
+
+[tool.coverage.run]
+# omit = ["*/tests_*.py"]
