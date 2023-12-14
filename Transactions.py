@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives import hashes
 from dataclasses import dataclass
 
 import dataclasses
-from typing import Iterable
+from typing import Iterable, Self
 
 import json
 import logging
@@ -78,7 +78,11 @@ class TransactionSigned(Transaction):
     #DESERIALIZATION 
     @classmethod
     def unpack_transaction(cls, packed_transaction: str):
-        return pickle.loads(packed_transaction.encode("latin-1"))
+        new_obj = pickle.loads(packed_transaction.encode("latin-1"))
+        if isinstance(new_obj,Self):
+            return new_obj
+        else:
+            raise Exception("Invalid object instance unpickled")
     
 def eval_balance(
     transactions: Iterable[TransactionSigned], accounts: dict[str, int], miner_fee: int

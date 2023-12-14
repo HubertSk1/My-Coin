@@ -15,10 +15,17 @@ class Block:
     data: str | None
     nonce: int | None
 
+@dataclass
+class GenesisBlock(Block):
+    index = 0
+    hash: None
+    timestamp: None
+
+
 class BlockChain:
     def __init__(self,difficulty = 4):
         self.genesis_hash =None
-        self.chain = [Block(0,self.genesis_hash,None,None,None,None)]
+        self.chain: list[Block] = [GenesisBlock(0,self.genesis_hash,None,None,None,None)]
         self.difficulty = difficulty
 
     def add_block(self, block : Block):
@@ -50,7 +57,7 @@ class BlockChain:
             print('Invalid previous hash')
             return False
         elif not self.hash_matches_difficulty(new_block.hash):
-            print('Number of 0 doesnt match teh difficulty')
+            print("Number of 0 doesn't match teh difficulty")
             return False
         elif self.calculate_hash_for_block(new_block) != new_block.hash:
             print('Invalid hash:', self.calculate_hash_for_block(new_block), new_block.hash)
@@ -82,15 +89,15 @@ class BlockChain:
         return True
     
     def unpack_transactions_from_blockchain(self):
-        list_with_transactions = []
+        list_with_transactions : list[str]= []
         for i in range(0, len(self.chain)):
-                if self.chain[i].data:
-                    list_with_transactions = list_with_transactions + ast.literal_eval(self.chain[i].data)
-        list_with_transactions = [TransactionSigned.unpack_transaction(str_transaction) for str_transaction in list_with_transactions ]
-        return list_with_transactions
+                data = self.chain[i].data
+                if data:
+                    list_with_transactions = list_with_transactions + ast.literal_eval(data)
+        return [TransactionSigned.unpack_transaction(str_transaction) for str_transaction in list_with_transactions ]
 
     #CONSENSUS    
-    def find_longer_chain(self,chain_to_check )-> None:
+    def find_longer_chain(self,chain_to_check )-> bool:
         if self.is_valid_chain(chain_to_check) and len(self.chain)<len(chain_to_check.chain):
             self.chain = chain_to_check.chain
             return True
