@@ -6,6 +6,6 @@ class Message_Generator:
         self.author = author #ip:port
         self.public_key = pub_key
     
-    def generate_message(self, message_type:str, data:str=None):
+    def generate_message(self, message_type:str, data:str | None =None):
         msg = {"public_key":self.public_key,"author":self.author,"message_type":message_type, "data":data}
         return msg
