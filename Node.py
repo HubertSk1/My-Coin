@@ -120,7 +120,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             ws.close()
 
     def send_familiar_nodes(self,target_node_name):
-        key_value_list = self.list_of_nodes.keys()
+        key_value_list = list(self.list_of_nodes.keys())
         if len(key_value_list) < 3:
             selected_data = self.list_of_nodes
         else:
