@@ -7,7 +7,7 @@ import random
 from typing import Any
 
 
-def verify(message, signature, public_key:str):
+def verify(message: str, signature : bytes, public_key:str):
         key = RSA.import_key(public_key)
         h = SHA256.new(message.encode('utf-8'))
         try:
@@ -18,11 +18,14 @@ def verify(message, signature, public_key:str):
         
 
 
-def sign(message:bytes or str, private_key:str)->bytes:
+def sign(message: bytes | str, private_key:str)->bytes:
         key = RSA.import_key(private_key)
-        if type(message) ==bytes:
-            h = SHA256.new(message)
-        else:    
-            h = SHA256.new(message.encode('utf-8'))
+        match message:
+            case bytes():
+                h = SHA256.new(message)
+            case str():
+                h = SHA256.new(message.encode('utf-8'))
+            case _:
+                raise TypeError('Unsupported type')
         signature = pkcs1_15.new(key).sign(h)
         return signature

@@ -57,7 +57,7 @@ class TransactionSigned(Transaction):
     @classmethod
     def from_transaction(cls, t: Transaction, private_key) :
         serialized = t.serialized_input_output().encode()
-        signature = sign(serialized, private_key)
+        signature = sign(serialized, private_key).hex()
         return cls(t.input, t.output,t.number_in_chain, signature)
 
     def is_valid(self) -> bool:
