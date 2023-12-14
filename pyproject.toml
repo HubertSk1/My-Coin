@@ -26,5 +26,11 @@ classifiers = [
   "Environment :: Console",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "black",
+  "pre-commit",
+]
+
 [tool.coverage.run]
 # omit = ["*/tests_*.py"]
