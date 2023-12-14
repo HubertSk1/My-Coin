@@ -26,7 +26,8 @@ class TransOutput:
 class Transaction:
     input: TransInput | None
     output: TransOutput
-    number_in_chain : int
+    number_in_chain: int
+
     def serialized_input_output(self) -> str:
         inp = self.input
         ou = self.output
@@ -49,15 +50,15 @@ class TransactionSigned(Transaction):
     signature: str
 
     @classmethod
-    def from_transaction(cls, t: Transaction, private_key) :
+    def from_transaction(cls, t: Transaction, private_key):
         serialized = t.serialized_input_output().encode()
         signature = sign(serialized, private_key).hex()
-        return cls(t.input, t.output,t.number_in_chain, signature)
+        return cls(t.input, t.output, t.number_in_chain, signature)
 
     def is_valid(self) -> bool:
         serialized = self.serialized_input_output()
         key = self.input.public_key if self.input else self.output.public_key
-        if self.output.amount<0:
+        if self.output.amount < 0:
             return False
         if self.input and self.input.amount != self.output.amount:
             return False
@@ -67,18 +68,20 @@ class TransactionSigned(Transaction):
         except Exception:
             return False
 
-    #SERIALIZATION
+    # SERIALIZATION
     def pack_transaction(self) -> str:
         return pickle.dumps(self).decode("latin-1")
-    #DESERIALIZATION 
+
+    # DESERIALIZATION
     @classmethod
     def unpack_transaction(cls, packed_transaction: str):
         new_obj = pickle.loads(packed_transaction.encode("latin-1"))
-        if isinstance(new_obj,Self):
+        if isinstance(new_obj, Self):
             return new_obj
         else:
             raise Exception("Invalid object instance unpickled")
-    
+
+
 def eval_balance(
     transactions: Iterable[TransactionSigned], accounts: dict[str, int], miner_fee: int
 ):
@@ -103,8 +106,8 @@ def eval_balance(
             payer_address = input.public_key
             payee_address = output.public_key
             expense = input.amount
-            if expense <0 :
-                raise Exception ("Input amount cant be a negative number")
+            if expense < 0:
+                raise Exception("Input amount cant be a negative number")
             payer_account_balance = accounts.get(payer_address)
             if not payer_account_balance:
                 raise Exception("Non existing payer attempting to transfer")
