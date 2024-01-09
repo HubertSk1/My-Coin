@@ -181,7 +181,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         )
         list_with_transactions = (
             self.blockchain.unpack_transactions_from_blockchain()
-            + self.proposed_transactions
+            + self.proposed_transactions + [transaction_signed,]
         )
         if verify:
             try:
@@ -193,6 +193,30 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         self.block_chain_edited_event.set()
         self.send_synchro_transactions(transaction_signed)
 
+    def handle_orphan_blocks(self,list_of_blocks):
+        list_with_transactions = []
+        for block in list_of_blocks:
+            data = block.data
+            if data:
+                list_with_transactions = list_with_transactions + ast.literal_eval(data)
+        Transactions_to_check  = [
+            TransactionSigned.unpack_transaction(str_transaction)
+            for str_transaction in list_with_transactions]
+        all_transactions = [
+            self.blockchain.unpack_transactions_from_blockchain()
+            + self.proposed_transactions ]
+            
+        for t in Transactions_to_check:
+            try:
+                eval_balance(all_transactions+t)
+            except Exception as E:
+                print(f"failed {E}")
+                continue    
+            all_transactions.append(t)
+            self.proposed_transactions.append(t)
+            self.block_chain_edited_event.set()
+            self.send_synchro_transactions(t)
+            
     # SERVER RECEIVING MESSAGES
     def start_listener(self):
         server = WebsocketServer(port=self.port)  # You can specify your desired port
@@ -238,10 +262,11 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 name = content["author"]
                 print(f"got blockchain sync from {name}")
                 blockchain_to_check = BlockChain.unpack_blockchain(data["blockchain"])
-                if self.blockchain.find_longer_chain(blockchain_to_check):
+                longer , orphan_blocks = self.blockchain.find_longer_chain(blockchain_to_check)
+                if  longer:
                     self.block_chain_edited_event.set()
                     self.send_synchro_blockchain(name)
-
+                    self.handle_orphan_blocks(orphan_blocks)
             elif msg_type == "transaction-sync":
                 data = content["data"]
                 name = content["author"]

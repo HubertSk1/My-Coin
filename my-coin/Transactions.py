@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 import dataclasses
-from typing import Iterable, Self
+from typing import Iterable
 
 import json
 import logging
@@ -76,7 +76,7 @@ class TransactionSigned(Transaction):
     @classmethod
     def unpack_transaction(cls, packed_transaction: str):
         new_obj = pickle.loads(packed_transaction.encode("latin-1"))
-        if isinstance(new_obj, Self):
+        if isinstance(new_obj, TransactionSigned):
             return new_obj
         else:
             raise Exception("Invalid object instance unpickled")
