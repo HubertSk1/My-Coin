@@ -19,6 +19,8 @@ from Message import Message_Generator
 from block import BlockChain, Block
 from Transactions import *
 
+MINER_FEE = 50
+
 
 class Node:
     def __init__(self, pass_phrase, port, ip):
@@ -87,7 +89,9 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         while 1:
             if self.start_mining.is_set():
                 self.block_chain_edited_event.clear()
-                Coin_Base = Transaction(None, TransOutput(self.public_key, 50), 0, 0)
+                Coin_Base = Transaction(
+                    None, TransOutput(self.public_key, MINER_FEE), 0, 0
+                )
                 Coin_Base_str = [
                     TransactionSigned.from_transaction(
                         Coin_Base, self._private_key
@@ -184,6 +188,9 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         list_with_transactions = (
             self.blockchain.unpack_transactions_from_blockchain()
             + self.proposed_transactions
+            + [
+                transaction_signed,
+            ]
         )
         if verify:
             try:
@@ -191,13 +198,39 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 # go from the beginning
                 # Create map for each public key
                 # it contains set of transaction_id
-                balances = eval_balance(list_with_transactions, {}, 50)
+                balances = eval_balance(list_with_transactions, {}, MINER_FEE)
             except Exception as E:
                 print(f"verification didnt pass")
                 return False
         self.proposed_transactions.append(transaction_signed)
         self.block_chain_edited_event.set()
         self.send_synchro_transactions(transaction_signed)
+
+    def handle_orphan_blocks(self, list_of_blocks):
+        list_with_transactions = []
+        for block in list_of_blocks:
+            data = block.data
+            if data:
+                list_with_transactions = list_with_transactions + ast.literal_eval(data)
+        Transactions_to_check = [
+            TransactionSigned.unpack_transaction(str_transaction)
+            for str_transaction in list_with_transactions
+        ]
+        all_transactions = (
+            self.blockchain.unpack_transactions_from_blockchain()
+            + self.proposed_transactions
+        )
+
+        for t in Transactions_to_check:
+            try:
+                eval_balance(all_transactions + [t], {}, MINER_FEE)
+            except Exception as E:
+                print(f"failed {E}")
+                continue
+            all_transactions.append(t)
+            self.proposed_transactions.append(t)
+            self.block_chain_edited_event.set()
+            self.send_synchro_transactions(t)
 
     # SERVER RECEIVING MESSAGES
     def start_listener(self):
@@ -244,10 +277,13 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 name = content["author"]
                 print(f"got blockchain sync from {name}")
                 blockchain_to_check = BlockChain.unpack_blockchain(data["blockchain"])
-                if self.blockchain.find_longer_chain(blockchain_to_check):
+                longer, orphan_blocks = self.blockchain.find_longer_chain(
+                    blockchain_to_check
+                )
+                if longer:
                     self.block_chain_edited_event.set()
                     self.send_synchro_blockchain(name)
-
+                    self.handle_orphan_blocks(orphan_blocks)
             elif msg_type == "transaction-sync":
                 data = content["data"]
                 name = content["author"]

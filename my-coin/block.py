@@ -4,6 +4,7 @@ from datetime import datetime
 import threading
 import pickle
 import ast
+from typing import List
 from Transactions import *
 
 
@@ -111,14 +112,18 @@ class BlockChain:
         ]
 
     # CONSENSUS
-    def find_longer_chain(self, chain_to_check) -> bool:
+    def find_longer_chain(self, chain_to_check) -> Tuple[bool, List[Block]]:
         if self.is_valid_chain(chain_to_check) and len(self.chain) < len(
             chain_to_check.chain
         ):
+            block_list: list[Block] = []
+            for index, block in enumerate(self.chain):
+                if block != chain_to_check.chain[index]:
+                    block_list.append(block)
             self.chain = chain_to_check.chain
-            return True
+            return True, block_list
         else:
-            return False
+            return False, []
 
     # MINING
     def generate_next_block(self, block_data: str, stop_event: threading.Event):

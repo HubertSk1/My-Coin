@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 import dataclasses
-from typing import Iterable, Self, Tuple
+from typing import Iterable, Tuple
 
 import json
 import logging
@@ -85,7 +85,7 @@ class TransactionSigned(Transaction):
     @classmethod
     def unpack_transaction(cls, packed_transaction: str):
         new_obj = pickle.loads(packed_transaction.encode("latin-1"))
-        if isinstance(new_obj, Self):
+        if isinstance(new_obj, TransactionSigned):
             return new_obj
         else:
             raise Exception("Invalid object instance unpickled")
@@ -97,7 +97,7 @@ def eval_balance(
     for trans in transactions:
         input = trans.input
         output = trans.output
-        # check signaged
+        # check signed
         # check if amount is the same as fee
         if not trans.is_valid():
             raise Exception("Transaction not valid")
