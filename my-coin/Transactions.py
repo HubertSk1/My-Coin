@@ -96,7 +96,7 @@ def known_transactions_id(list_with_transactions: Iterable[TransactionSigned]):
     for transaction in list_with_transactions:
         trans_input = transaction.input
         if not trans_input:
-            if transaction.transaction_id is 0:
+            if transaction.transaction_id != 0:
                 raise Exception("Genesis with wrong id")
         else:
             public_key = trans_input.public_key
