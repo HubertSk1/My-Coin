@@ -175,7 +175,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 self.send_msg(name, message)
 
     def add_transaction(self, to, amount_from, amount_to, verify: bool = False):
-        trans_id = int(os.urandom(8))
+        trans_id = int.from_bytes(os.urandom(8),"big")
         transaction_not_signed = Transaction(
             TransInput(self.public_key, amount_from),
             TransOutput(to, amount_to),
