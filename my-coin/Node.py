@@ -87,7 +87,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         while 1:
             if self.start_mining.is_set():
                 self.block_chain_edited_event.clear()
-                Coin_Base = Transaction(None, TransOutput(self.public_key, 50), 0)
+                Coin_Base = Transaction(None, TransOutput(self.public_key, 50), 0, 0)
                 Coin_Base_str = [
                     TransactionSigned.from_transaction(
                         Coin_Base, self._private_key
@@ -171,9 +171,11 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 self.send_msg(name, message)
 
     def add_transaction(self, to, amount_from, amount_to, verify: bool = False):
+        trans_id = int(os.urandom(8))
         transaction_not_signed = Transaction(
             TransInput(self.public_key, amount_from),
             TransOutput(to, amount_to),
+            trans_id,
             len(self.proposed_transactions) + 1,
         )
         transaction_signed = TransactionSigned.from_transaction(
@@ -185,6 +187,10 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         )
         if verify:
             try:
+                # check if id is all right
+                # go from the beginning
+                # Create map for each public key
+                # it contains set of transaction_id
                 balances = eval_balance(list_with_transactions, {}, 50)
             except Exception as E:
                 print(f"verification didnt pass")

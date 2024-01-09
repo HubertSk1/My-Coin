@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 import dataclasses
-from typing import Iterable, Self
+from typing import Iterable, Self, Tuple
 
 import json
 import logging
@@ -26,23 +26,26 @@ class TransOutput:
 class Transaction:
     input: TransInput | None
     output: TransOutput
+    transaction_id: int
     number_in_chain: int
 
     def serialized_input_output(self) -> str:
         inp = self.input
+        t_id = self.transaction_id
         ou = self.output
         separators = (",", ":")
         output_json_dump = json.dumps(
             obj=dataclasses.asdict(ou), sort_keys=True, separators=separators
         )
+        ser_t_id = json.dumps(t_id, separators=separators)
 
         if inp:
             inp_json_dump = json.dumps(
                 obj=dataclasses.asdict(inp), sort_keys=True, separators=separators
             )
-            return inp_json_dump + "|" + output_json_dump
+            return inp_json_dump + "|" + ser_t_id + "|" + output_json_dump
         else:
-            return "|" + output_json_dump
+            return "|" + ser_t_id + "|" + output_json_dump
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,10 +53,16 @@ class TransactionSigned(Transaction):
     signature: str
 
     @classmethod
-    def from_transaction(cls, t: Transaction, private_key):
-        serialized = t.serialized_input_output().encode()
+    def from_transaction(cls, transaction: Transaction, private_key):
+        serialized = transaction.serialized_input_output().encode()
         signature = sign(serialized, private_key).hex()
-        return cls(t.input, t.output, t.number_in_chain, signature)
+        return cls(
+            transaction.input,
+            transaction.output,
+            transaction.transaction_id,
+            transaction.number_in_chain,
+            signature,
+        )
 
     def is_valid(self) -> bool:
         serialized = self.serialized_input_output()

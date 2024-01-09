@@ -1,5 +1,6 @@
 import enum
 import hashlib as hash
+import os
 from pprint import pprint
 from Transactions import *
 
@@ -9,7 +10,7 @@ other_keys = list(map(lambda x: str(x), range(5)))
 
 
 def dummy_trans():
-    t = TransactionSigned(None, TransOutput(my_pub_key, 50), 0, "podpis")
+    t = TransactionSigned(None, TransOutput(my_pub_key, 50), 0, 0, "podpis")
     # pop first transaction (coinbase)
     # Sed 5 to others
     firs = TransInput(my_pub_key, 2)
@@ -18,6 +19,7 @@ def dummy_trans():
     for idx, account in enumerate(other_keys):
         amount = 2
         inp = TransInput(my_pub_key, amount)
+        r = int(os.urandom(8))
         output = TransOutput(account, amount)
         # print(
         # inp
@@ -26,7 +28,7 @@ def dummy_trans():
         # output
         # )
         # print("Give everybody 2")
-        tra = TransactionSigned(inp, output, idx, sign)
+        tra = TransactionSigned(inp, output, r, idx, sign)
         transactions.append(tra)
     return transactions
 
