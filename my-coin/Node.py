@@ -198,9 +198,10 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 # go from the beginning
                 # Create map for each public key
                 # it contains set of transaction_id
+                known_transactions_id(list_with_transactions)
                 balances = eval_balance(list_with_transactions, {}, MINER_FEE)
             except Exception as E:
-                print(f"verification didnt pass")
+                print(f"verification didn't pass")
                 return False
         self.proposed_transactions.append(transaction_signed)
         self.block_chain_edited_event.set()
@@ -223,6 +224,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
 
         for t in Transactions_to_check:
             try:
+                known_transactions_id(all_transactions + [t])
                 eval_balance(all_transactions + [t], {}, MINER_FEE)
             except Exception as E:
                 print(f"failed {E}")
@@ -257,7 +259,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             if msg_type == "req-join":
                 self.send_familiar_nodes(content["author"])
                 self.list_of_nodes[content["public_key"]] = content["author"]
-                print("got reqeust-join, send join-list")
+                print("got request-join, send join-list")
 
             elif msg_type == "join-list":
                 print("got_node_list")

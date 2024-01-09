@@ -91,6 +91,27 @@ class TransactionSigned(Transaction):
             raise Exception("Invalid object instance unpickled")
 
 
+def known_transactions_id(list_with_transactions: Iterable[TransactionSigned]):
+    known_trans: dict[str, set[int]] = {}
+    for transaction in list_with_transactions:
+        trans_input = transaction.input
+        if not trans_input:
+            if transaction.transaction_id is 0:
+                raise Exception("Genesis with wrong id")
+        else:
+            public_key = trans_input.public_key
+            trans_id = transaction.transaction_id
+            if user_trans := known_trans.get(public_key):
+                if trans_id in user_trans:
+                    raise Exception(
+                        f"Replay of transaction with already used id:{trans_id}"
+                    )
+                else:
+                    user_trans.add(trans_id)
+                    out = transaction.output
+    return known_trans
+
+
 def eval_balance(
     transactions: Iterable[TransactionSigned], accounts: dict[str, int], miner_fee: int
 ):
@@ -103,7 +124,7 @@ def eval_balance(
             raise Exception("Transaction not valid")
 
         if not input:
-            # mined
+            # coinbase
             if output.amount == miner_fee:
                 if not accounts.get(output.public_key):
                     accounts[output.public_key] = miner_fee
