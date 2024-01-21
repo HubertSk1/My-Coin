@@ -43,7 +43,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         # TRANSACTIONS
         self.proposed_transactions = []  # List of transactions
         # BLOCKCHAIN
-        self.blockchain = BlockChain(4)
+        self.blockchain = BlockChain(5)
         self.block_chain_edited_event = threading.Event()
         self.start_mining = threading.Event()
 
@@ -126,14 +126,15 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
 
         msg_to_send = {"signature": signature, "content": message}
         msg_json = json.dumps(msg_to_send)
-        uri = f"ws://{name}"  # ip:port
-        ws = websocket.WebSocket()
-        ws.connect(uri)
         try:
+            uri = f"ws://{name}"  # ip:port
+            ws = websocket.WebSocket()
+            ws.connect(uri)
             ws.send(msg_json)
-
-        finally:
             ws.close()
+        except Exception as E:
+            print("Couldnt send the message")
+
 
     def send_familiar_nodes(self, target_node_name):
         key_value_list = list(self.list_of_nodes.keys())
@@ -339,8 +340,8 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 [print(f"-----\n{block}\n-----") for block in self.blockchain.chain]
             elif user_input == "mine":
                 self.start_mining.set()
-            # TRANSACTIONS TESTS
 
+            # TRANSACTIONS TESTS
             elif user_input == "pay_familiar_node":
                 self.add_transaction(list(self.list_of_nodes.keys())[-1], 10, 10, True)
             elif user_input == "double_pay":
@@ -367,6 +368,15 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             elif user_input == "double_spender":
                 self.add_transaction(self.Home_Node_Public, 50, 50, False)
                 self.add_transaction(self.Home_Node_Public, 50, 50, False)
+            #Block CHEATER ATTEMPS:
+            if user_input == "fake_mine":
+                self.blockchain.chain.append(Block(10,"fsds","fsd","now",{},1))
+                self.start_mining.set()
+            # Data lost 
+            elif user_input == "clear_blockchain":
+                self.blockchain.chain = []
+                
+
 
         sys.exit()
 

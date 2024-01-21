@@ -142,6 +142,7 @@ def eval_balance(
             if not payer_account_balance:
                 raise Exception("Non existing payer attempting to transfer")
             else:
+                print(payer_account_balance)
                 if payer_account_balance < expense:
                     raise Exception("Spending above amount")
                 else:

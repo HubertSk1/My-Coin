@@ -91,7 +91,7 @@ class BlockChain:
 
         # Verify Transactions
 
-        list_with_transactions = self.unpack_transactions_from_blockchain()
+        list_with_transactions = blockchain_to_validate.unpack_transactionsm_blockchain()
         try:
             eval_balance(list_with_transactions, {}, 50)
         except Exception as E:
