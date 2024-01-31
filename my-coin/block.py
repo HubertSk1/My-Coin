@@ -4,8 +4,8 @@ from datetime import datetime
 import threading
 import pickle
 import ast
-from typing import List
-from Transactions import *
+from typing import List, Self, Tuple
+from Transactions import TransactionSigned, eval_balance
 
 
 @dataclass
@@ -26,7 +26,7 @@ class GenesisBlock(Block):
 
 
 class BlockChain:
-    def __init__(self, difficulty=4):
+    def __init__(self, difficulty: int = 4):
         self.genesis_hash = None
         self.chain: list[Block] = [
             GenesisBlock(0, self.genesis_hash, None, None, None, None)
@@ -43,6 +43,7 @@ class BlockChain:
     def calculate_hash_from_values(
         self, index: int, previous_hash: str, timestamp: int, data: str, nonce: int
     ):
+        # TODO: To może być niebezpieczne w bardzo konkretnej sytuacji np. przypadkowo wszystkie wartości sa takie same
         data_str = f"{index}{previous_hash}{timestamp}{data}{nonce}"
         hashed_data = sha256(data_str.encode()).hexdigest()
         return hashed_data
@@ -75,31 +76,6 @@ class BlockChain:
             return False
         return True
 
-    def is_valid_chain(self, blockchain_to_validate):
-        # Verify if genesis valid
-        if blockchain_to_validate.chain[0].index != 0:
-            return False
-        elif blockchain_to_validate.chain[0].hash != None:
-            return False
-
-        # Verify the rest of blocks
-        for i in range(1, len(blockchain_to_validate.chain)):
-            if not self.is_valid_new_block(
-                blockchain_to_validate.chain[i], blockchain_to_validate.chain[i - 1]
-            ):
-                return False
-
-        # Verify Transactions
-
-        list_with_transactions = blockchain_to_validate.unpack_transactionsm_blockchain()
-        try:
-            eval_balance(list_with_transactions, {}, 50)
-        except Exception as E:
-            print(E)
-            return False
-
-        return True
-
     def unpack_transactions_from_blockchain(self):
         list_with_transactions: list[str] = []
         for i in range(0, len(self.chain)):
@@ -111,8 +87,36 @@ class BlockChain:
             for str_transaction in list_with_transactions
         ]
 
+    def is_valid_chain(self, blockchain_to_validate: Self):
+        # Verify if genesis valid
+        first = blockchain_to_validate.chain[0]
+        if first.index != 0:
+            return False
+        elif isinstance(first, GenesisBlock):
+            if first.hash:
+                return False
+
+        # Verify the rest of blocks
+        for i in range(1, len(blockchain_to_validate.chain)):
+            if not self.is_valid_new_block(
+                blockchain_to_validate.chain[i], blockchain_to_validate.chain[i - 1]
+            ):
+                return False
+
+        # Verify Transactions
+        list_with_transactions = (
+            blockchain_to_validate.unpack_transactions_from_blockchain()
+        )
+        try:
+            eval_balance(list_with_transactions, {}, 50)
+        except Exception as E:
+            print(E)
+            return False
+
+        return True
+
     # CONSENSUS
-    def find_longer_chain(self, chain_to_check) -> Tuple[bool, List[Block]]:
+    def find_longer_chain(self, chain_to_check: Self) -> Tuple[bool, List[Block]]:
         if self.is_valid_chain(chain_to_check) and len(self.chain) < len(
             chain_to_check.chain
         ):

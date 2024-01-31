@@ -1,4 +1,5 @@
-from typing import Tuple
+import ipaddress
+from typing import Any, AnyStr
 from websocket_server import WebsocketServer
 import websocket
 import random
@@ -6,25 +7,31 @@ import json
 import hashlib
 import base64
 import threading
-import os, sys
-import random
+import os
+import sys
 import ast
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
-from Crypto.Random import get_random_bytes
 
 
 from Message import Message_Generator
 from block import BlockChain, Block
-from Transactions import *
+from Transactions import (
+    Transaction,
+    TransactionSigned,
+    TransInput,
+    TransOutput,
+    eval_balance,
+    known_transactions_id,
+)
 
 MINER_FEE = 50
 
 
 class Node:
-    def __init__(self, pass_phrase, port, ip):
-        self.ip = ip
+    def __init__(self, pass_phrase: str, port: int, ip: AnyStr | int):
+        self.ip = ipaddress.ip_address(ip)
         self.port = port
         self.pass_phrase = pass_phrase
 
@@ -41,14 +48,14 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             self.Home_Node_Public: self.Home_Node_name
         }  # format {public_key":"ip:port"}
         # TRANSACTIONS
-        self.proposed_transactions = []  # List of transactions
+        self.proposed_transactions: list[TransactionSigned] = []  # List of transactions
         # BLOCKCHAIN
         self.blockchain = BlockChain(5)
         self.block_chain_edited_event = threading.Event()
         self.start_mining = threading.Event()
 
     # SIGNATURES
-    def generate_keys(self, input_word: str) -> Tuple[str, str]:
+    def generate_keys(self, input_word: str) -> tuple[str, str]:
         """Derive a private and public key pair from the user input using a deterministic method."""
 
         # Seed python's random with the hash of the input_word for a bit more entropy.
@@ -56,7 +63,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         random.seed(seed)
 
         # A function to produce deterministic random bytes using Python's random
-        def deterministic_random_bytes(n):
+        def deterministic_random_bytes(n: int):
             return bytes([random.randint(0, 255) for _ in range(n)])
 
         # Use a constant value for reproducible key generation
@@ -67,16 +74,17 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         public_key = key.publickey().export_key().decode("utf-8")
         return (private_key, public_key)
 
-    def sign_message(self, message, private_key: str):
+    def sign_message(self, message: AnyStr, private_key: str):
         key = RSA.import_key(private_key)
-        if type(message) == bytes:
-            h = SHA256.new(message)
-        else:
-            h = SHA256.new(message.encode("utf-8"))
+        match message:
+            case bytes():
+                h = SHA256.new(message)
+            case str():
+                h = SHA256.new(message.encode("utf-8"))
         signature = pkcs1_15.new(key).sign(h)
         return signature
 
-    def verify_signature(self, message, signature, public_key):
+    def verify_signature(self, message: str, signature: bytes, public_key: str | bytes):
         key = RSA.import_key(public_key)
         h = SHA256.new(message.encode("utf-8"))
         try:
@@ -119,7 +127,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         mine_thread.start()
 
     # SERVER SENDING MESSAGES
-    def send_msg(self, name, message):
+    def send_msg(self, name: str, message: Any):
         for_signing = json.dumps(message)
         signature = self.sign_message(for_signing, self._private_key)
         signature = base64.b64encode(signature).decode("utf-8")
@@ -132,11 +140,10 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             ws.connect(uri)
             ws.send(msg_json)
             ws.close()
-        except Exception as E:
+        except Exception:
             print("Couldnt send the message")
 
-
-    def send_familiar_nodes(self, target_node_name):
+    def send_familiar_nodes(self, target_node_name: str):
         key_value_list = list(self.list_of_nodes.keys())
         if len(key_value_list) < 3:
             selected_data = self.list_of_nodes
@@ -159,7 +166,7 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
         message = self.mg.generate_message("req-join", None)
         self.send_msg(self.Home_Node_name, message)
 
-    def send_synchro_blockchain(self, to_skip=None):
+    def send_synchro_blockchain(self, to_skip: str | None = None):
         message = self.mg.generate_message(
             "blockchain-sync", {"blockchain": self.blockchain.pack_blockchain()}
         )
@@ -167,7 +174,9 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             if name != to_skip:
                 self.send_msg(name, message)
 
-    def send_synchro_transactions(self, transaction: TransactionSigned, to_skip=None):
+    def send_synchro_transactions(
+        self, transaction: TransactionSigned, to_skip: str | None = None
+    ):
         message = self.mg.generate_message(
             "transaction-sync", {"transaction": transaction.pack_transaction()}
         )
@@ -175,8 +184,10 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             if name != to_skip:
                 self.send_msg(name, message)
 
-    def add_transaction(self, to, amount_from, amount_to, verify: bool = False):
-        trans_id = int.from_bytes(os.urandom(8),"big")
+    def add_transaction(
+        self, to: str, amount_from: int, amount_to: int, verify: bool = False
+    ):
+        trans_id = int.from_bytes(os.urandom(8), "big")
         transaction_not_signed = Transaction(
             TransInput(self.public_key, amount_from),
             TransOutput(to, amount_to),
@@ -200,16 +211,16 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
                 # Create map for each public key
                 # it contains set of transaction_id
                 known_transactions_id(list_with_transactions)
-                balances = eval_balance(list_with_transactions, {}, MINER_FEE)
-            except Exception as E:
-                print(f"verification didn't pass")
+                eval_balance(list_with_transactions, {}, MINER_FEE)
+            except Exception:
+                print("verification didn't pass")
                 return False
         self.proposed_transactions.append(transaction_signed)
         self.block_chain_edited_event.set()
         self.send_synchro_transactions(transaction_signed)
 
-    def handle_orphan_blocks(self, list_of_blocks):
-        list_with_transactions = []
+    def handle_orphan_blocks(self, list_of_blocks: list[Block]):
+        list_with_transactions: list[str] = []
         for block in list_of_blocks:
             data = block.data
             if data:
@@ -247,7 +258,12 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             server.shutdown()
         server.run_forever()
 
-    def analyze_message(self, client, server, message):
+    def analyze_message(
+        self,
+        client: dict[str, str | tuple[str, str]],
+        server: WebsocketServer,
+        message: str,
+    ):
         msg_json = json.loads(message)
         content = msg_json["content"]
         signature = base64.b64decode(msg_json["signature"].encode("utf-8"))
@@ -265,12 +281,12 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             elif msg_type == "join-list":
                 print("got_node_list")
                 data = json.loads(content["data"])
-                nodes = data["nodes"]
+                nodes: dict[str, str] = data["nodes"]
                 for key, value in nodes.items():
                     self.list_of_nodes[key] = value
                 try:
                     self.list_of_nodes.pop(self.public_key)
-                except:
+                except KeyError:
                     pass
                 blockchain_to_check = BlockChain.unpack_blockchain(data["blockchain"])
                 self.blockchain.find_longer_chain(blockchain_to_check)
@@ -368,15 +384,13 @@ o+XXkoDGDpZQ+mA7IxBlvoxkG6PAZ9yJU9b1tMsaXGzKcGDNbGyc7CoSyyqouTWe
             elif user_input == "double_spender":
                 self.add_transaction(self.Home_Node_Public, 50, 50, False)
                 self.add_transaction(self.Home_Node_Public, 50, 50, False)
-            #Block CHEATER ATTEMPS:
+            # Block CHEATER ATTEMPS:
             if user_input == "fake_mine":
-                self.blockchain.chain.append(Block(10,"fsds","fsd","now",{},1))
+                self.blockchain.chain.append(Block(10, "fsds", "fsd", "now", {}, 1))
                 self.start_mining.set()
-            # Data lost 
+            # Data lost
             elif user_input == "clear_blockchain":
                 self.blockchain.chain = []
-                
-
 
         sys.exit()
 

@@ -1,8 +1,8 @@
-import enum
-import hashlib as hash
 import os
 from pprint import pprint
-from Transactions import *
+import json
+import dataclasses
+from Transactions import TransactionSigned, TransInput, TransOutput, eval_balance
 
 my_pub_key = "sdfsfd"
 
@@ -13,7 +13,6 @@ def dummy_trans():
     t = TransactionSigned(None, TransOutput(my_pub_key, 50), 0, 0, "podpis")
     # pop first transaction (coinbase)
     # Sed 5 to others
-    firs = TransInput(my_pub_key, 2)
     transactions = [t]
     sign = "podpis"
     for idx, account in enumerate(other_keys):
@@ -33,12 +32,12 @@ def dummy_trans():
     return transactions
 
 
-def test_balance(dummy_trans):
-    transactions: list[TransactionSigned] = dummy_trans
+def test_balance(dummy_trans: list[TransactionSigned]):
+    transactions = dummy_trans
     # build balance
     accounts = {}
-    minner_fee = 50
-    eval_balance(transactions, accounts, 50)
+    miner_fee = 50
+    eval_balance(transactions, accounts, miner_fee)
 
     print("###### Transactions")
     pprint(transactions)
@@ -46,8 +45,8 @@ def test_balance(dummy_trans):
     pprint(accounts)
 
 
-def test_trans_serialized(dummy_trans):
-    transactions: list[TransactionSigned] = dummy_trans
+def test_trans_serialized(dummy_trans: list[TransactionSigned]):
+    transactions = dummy_trans
     for t in transactions:
         print(t)
         print("After serialized")

@@ -1,10 +1,6 @@
 from Crypto.Hash import SHA256
 from Crypto.Signature import pkcs1_15
 from Crypto.PublicKey import RSA
-from pprint import pprint
-import json
-import random
-from typing import Any
 
 
 def verify(message: str, signature: bytes, public_key: str):
@@ -24,7 +20,5 @@ def sign(message: bytes | str, private_key: str) -> bytes:
             h = SHA256.new(message)
         case str():
             h = SHA256.new(message.encode("utf-8"))
-        case _:
-            raise TypeError("Unsupported type")
     signature = pkcs1_15.new(key).sign(h)
     return signature

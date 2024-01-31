@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 
 import dataclasses
-from typing import Iterable, Tuple
+from typing import Iterable
 
 import json
-import logging
 import pickle
 
 from utils import verify, sign
@@ -53,7 +52,7 @@ class TransactionSigned(Transaction):
     signature: str
 
     @classmethod
-    def from_transaction(cls, transaction: Transaction, private_key):
+    def from_transaction(cls, transaction: Transaction, private_key: str):
         serialized = transaction.serialized_input_output().encode()
         signature = sign(serialized, private_key).hex()
         return cls(
@@ -95,7 +94,7 @@ def known_transactions_id(list_with_transactions: Iterable[TransactionSigned]):
     known_trans: dict[str, set[int]] = {}
     for transaction in list_with_transactions:
         trans_input = transaction.input
-        if not trans_input:
+        if not (trans_input := transaction.input):
             if transaction.transaction_id != 0:
                 raise Exception("Genesis with wrong id")
         else:
@@ -108,7 +107,6 @@ def known_transactions_id(list_with_transactions: Iterable[TransactionSigned]):
                     )
                 else:
                     user_trans.add(trans_id)
-                    out = transaction.output
     return known_trans
 
 
